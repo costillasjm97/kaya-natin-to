@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Classroom Access Management System</title>
+<style>
+  :root{
+    --bg:#eef1ee; --surface:#fff; --ink:#1c2b27; --muted:#5d6b66; --line:#d5dcd8;
+    --brand:#0f5c4d; --brand-ink:#fff; --warn:#b4541a; --bad:#a32d2d; --ok:#2e7d32;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(--ink);line-height:1.5}
+  h1,h2,h3{font-family:Georgia,"Times New Roman",serif;margin:0 0 .5rem}
+  .hidden{display:none!important}
+  :focus-visible{outline:3px solid #e0a100;outline-offset:2px}
+
+  /* Login */
+  .login-wrap{min-height:100vh;display:grid;place-items:center;padding:1.5rem}
+  .login{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:2rem;width:100%;max-width:400px}
+  .login h1{font-size:1.5rem}
+  .login p{color:var(--muted);margin:0 0 1.25rem;font-size:.95rem}
+
+  label{display:block;font-weight:600;font-size:.9rem;margin:.9rem 0 .25rem}
+  input,select,textarea{width:100%;padding:.6rem .7rem;border:1px solid #aeb9b4;border-radius:6px;font:inherit;background:#fff;color:var(--ink)}
+  button{font:inherit;cursor:pointer;border:0;border-radius:6px;padding:.6rem 1rem;background:var(--brand);color:var(--brand-ink);font-weight:600}
+  button.ghost{background:transparent;color:var(--brand);border:1px solid var(--brand)}
+  button.danger{background:var(--bad)}
+  button.small{padding:.35rem .7rem;font-size:.85rem}
+  .login button[type=submit]{width:100%;margin-top:1.25rem}
+  .error{color:var(--bad);font-size:.9rem;margin-top:.75rem;min-height:1.2em}
+  .show{display:flex;align-items:center;gap:.5rem;font-weight:400;margin:.5rem 0 0}
+  .show input{width:auto}
+
+  /* App shell */
+  header{background:var(--brand);color:#fff;display:flex;justify-content:space-between;align-items:center;padding:.8rem 1.25rem;gap:1rem;flex-wrap:wrap}
+  header h1{font-size:1.15rem;margin:0}
+  header span{opacity:.85;font-size:.9rem}
+  header button{background:#fff;color:var(--brand)}
+  main{max-width:980px;margin:1.5rem auto;padding:0 1rem;display:grid;gap:1.25rem}
+  .panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:1.25rem}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+  @media(max-width:640px){.row{grid-template-columns:1fr}}
+
+  /* Request lists */
+  .req{border:1px solid var(--line);border-radius:8px;padding:.85rem 1rem;margin-top:.75rem;display:grid;gap:.35rem}
+  .req .top{display:flex;justify-content:space-between;gap:.5rem;flex-wrap:wrap;align-items:center}
+  .meta{color:var(--muted);font-size:.88rem}
+  .badge{padding:.1rem .6rem;border-radius:99px;font-size:.8rem;font-weight:600;background:#e7ecea}
+  .badge.pending{background:#fbe9d6;color:var(--warn)}
+  .badge.approved{background:#dcefdc;color:var(--ok)}
+  .badge.denied{background:#f6dcdc;color:var(--bad)}
+  .badge.completed{background:#e0e6f3;color:#2f4a8a}
+  .order{font-family:Georgia,serif;font-size:1.6rem;color:var(--brand);min-width:2rem}
+  .req.sched{grid-template-columns:auto 1fr;align-items:start;column-gap:1rem}
+  .actions{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.35rem}
+  .empty{color:var(--muted);padding:.75rem 0}
+  .hint{font-size:.85rem;color:var(--muted)}
+</style>
+</head>
+<body>
+
+<!-- ===================== LOGIN ===================== -->
+<div class="login-wrap" id="loginView">
+  <form class="login" id="loginForm" novalidate>
+    <h1>Classroom Access System</h1>
+    <p>Sign in to request or manage classroom access.</p>
+
+    <label for="role">I am a</label>
+    <select id="role">
+      <option value="Student">Student</option>
+      <option value="Professor">Professor</option>
+      <option value="Guard">Guard</option>
+    </select>
+
+    <label for="email">Email</label>
+    <input id="email" type="email" placeholder="name@cvsu.edu.ph" autocomplete="username">
+
+    <label for="password">Password</label>
+    <input id="password" type="password" autocomplete="current-password">
+    <label class="show"><input type="checkbox" id="showPw"> Show password</label>
+
+    <div id="inviteWrap" class="hidden">
+      <label for="invite">Staff invite code</label>
+      <input id="invite" type="text" autocomplete="off">
+    </div>
+
+    <button type="submit" id="submitBtn">Sign in</button>
+    <div class="error" id="loginError" role="alert"></div>
+    <p class="hint">Passwords need 8+ characters. Professors and Guards need an invite code from the administrator.<br>
+      <button type="button" class="ghost small" id="modeBtn">Create an account</button></p>
+  </form>
+</div>
+
+<!-- ===================== APP ===================== -->
+<div id="appView" class="hidden">
+  <header>
+    <div>
+      <h1>Classroom Access System</h1>
+      <span id="whoami"></span>
+    </div>
+    <button id="logoutBtn" type="button">Sign out</button>
+  </header>
+
+  <!-- Student / Professor: request only -->
+  <main id="requesterView" class="hidden">
+    <section class="panel">
+      <h2>Request classroom access</h2>
+      <form id="requestForm" novalidate>
+        <div class="row">
+          <div>
+            <label for="room">Classroom</label>
+            <select id="room"></select>
+          </div>
+          <div>
+            <label for="neededAt">Time needed</label>
+            <input id="neededAt" type="time">
+          </div>
+        </div>
+        <label for="reason">Reason</label>
+        <textarea id="reason" rows="3" placeholder="e.g. Group project meeting, makeup class"></textarea>
+        <div class="actions"><button type="submit">Send request</button></div>
+        <div class="error" id="reqError" role="alert"></div>
+      </form>
+    </section>
+
+    <section class="panel">
+      <h2>My requests</h2>
+      <div id="myRequests"></div>
+    </section>
+  </main>
+
+  <!-- Guard: receive + distance-based scheduling -->
+  <main id="guardView" class="hidden">
+    <section class="panel">
+      <h2>Guard location</h2>
+      <div class="row">
+        <div>
+          <label for="guardPos">Current post</label>
+          <select id="guardPos"></select>
+        </div>
+        <div>
+          <label for="agingWeight">Waiting-time weight (meters per minute)</label>
+          <input id="agingWeight" type="number" min="0" value="5">
+        </div>
+      </div>
+      <p class="hint">The route starts at your post and always goes to the nearest pending room next. Each minute a request waits subtracts the weight above from its distance, so older requests are not skipped forever.</p>
+    </section>
+
+    <section class="panel">
+      <h2>Scheduled route</h2>
+      <div id="schedule"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Handled requests</h2>
+      <div id="history"></div>
+    </section>
+  </main>
+</div>
+
+<script>
+/* ============ Helpers ============ */
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fmtTime = iso => new Date(iso).toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" });
+const fmtDur = s => s < 60 ? `${Math.round(s)} sec` : `${Math.round(s/60)} min`;
+
+let token = null, user = null, rooms = [], mode = "login", pollId = null;
+try { token = sessionStorage.getItem("cams_token"); user = JSON.parse(sessionStorage.getItem("cams_user")); } catch {}
+const roomName = id => (rooms.find(r => r.id === id) || {}).name || id;
+
+/* ============ API wrapper ============ */
+async function api(path, opts = {}) {
+  const res = await fetch("/api" + path, {
+    method: opts.method || "GET",
+    headers: { "Content-Type": "application/json", ...(token ? { Authorization: "Bearer " + token } : {}) },
+    body: opts.body ? JSON.stringify(opts.body) : undefined
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    if (res.status === 401 && token) logout();
+    throw new Error(data.error || "Request failed.");
+  }
+  return data;
+}
+
+/* ============ Login / register ============ */
+function syncLoginMode() {
+  const staff = $("role").value !== "Student";
+  $("inviteWrap").classList.toggle("hidden", !(mode === "register" && staff));
+  $("submitBtn").textContent = mode === "login" ? "Sign in" : "Create account";
+  $("modeBtn").textContent = mode === "login" ? "Create an account" : "Back to sign in";
+  $("loginError").textContent = "";
+}
+$("role").addEventListener("change", syncLoginMode);
+$("showPw").addEventListener("change", e => {
+  $("password").type = e.target.checked ? "text" : "password";
+});
+$("modeBtn").addEventListener("click", () => { mode = mode === "login" ? "register" : "login"; syncLoginMode(); });
+
+$("loginForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  try {
+    const out = await api(`/auth/${mode}`, { method: "POST", body: {
+      email: $("email").value.trim(),
+      password: $("password").value,
+      role: $("role").value,
+      inviteCode: $("invite").value.trim()
+    }});
+    token = out.token; user = out.user;
+    try { sessionStorage.setItem("cams_token", token); sessionStorage.setItem("cams_user", JSON.stringify(user)); } catch {}
+    $("loginForm").reset();
+    $("password").type = "password";
+    mode = "login"; syncLoginMode();
+    await start();
+  } catch (err) { $("loginError").textContent = err.message; }
+});
+
+function logout() {
+  try { sessionStorage.clear(); } catch {}
+  clearInterval(pollId);
+  token = null; user = null;
+  show();
+}
+$("logoutBtn").addEventListener("click", logout);
+
+/* ============ Page switching ============ */
+function show() {
+  $("loginView").classList.toggle("hidden", !!user);
+  $("appView").classList.toggle("hidden", !user);
+  if (!user) return;
+  $("whoami").textContent = `${user.role} | ${user.email}`;
+  const isGuard = user.role === "Guard";
+  $("guardView").classList.toggle("hidden", !isGuard);
+  $("requesterView").classList.toggle("hidden", isGuard);
+}
+
+async function start() {
+  try { rooms = await api("/rooms"); } catch { return; }
+  $("room").innerHTML = rooms.filter(r => r.id !== "GP").map(r => `<option value="${r.id}">${esc(r.name)}</option>`).join("");
+  $("guardPos").innerHTML = rooms.map(r => `<option value="${r.id}">${esc(r.name)}</option>`).join("");
+  show();
+  await refresh();
+  clearInterval(pollId);
+  pollId = setInterval(refresh, 5000); // polling keeps the guard's route live
+}
+
+async function refresh() {
+  if (!user) return;
+  try {
+    if (user.role === "Guard") {
+      const w = Math.max(0, parseFloat($("agingWeight").value) || 0);
+      const [sch, hist] = await Promise.all([
+        api(`/schedule?start=${encodeURIComponent($("guardPos").value)}&weight=${w}`),
+        api("/requests/history")
+      ]);
+      renderGuard(sch.route, hist);
+    } else {
+      renderMine(await api("/requests/mine"));
+    }
+  } catch { /* 401 is handled in api(); other errors retry on the next poll */ }
+}
+
+/* ============ Student / Professor ============ */
+$("requestForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  try {
+    await api("/requests", { method: "POST", body: {
+      roomId: $("room").value, neededAt: $("neededAt").value, reason: $("reason").value.trim()
+    }});
+    $("reqError").textContent = "";
+    $("requestForm").reset();
+    refresh();
+  } catch (err) { $("reqError").textContent = err.message; }
+});
+
+function renderMine(list) {
+  $("myRequests").innerHTML = list.length ? list.map(r => `
+    <div class="req">
+      <div class="top"><strong>${esc(roomName(r.roomId))}</strong><span class="badge ${r.status}">${r.status}</span></div>
+      <div class="meta">Needed: ${esc(r.neededAt)} | Sent ${fmtTime(r.createdAt)}</div>
+      <div>${esc(r.reason)}</div>
+    </div>`).join("") : `<div class="empty">No requests yet. Send one above.</div>`;
+}
+
+/* ============ Guard ============ */
+function renderGuard(route, hist) {
+  $("schedule").innerHTML = route.length ? route.map((s, i) => `
+    <div class="req sched">
+      <div class="order">${i + 1}</div>
+      <div>
+        <div class="top"><strong>${esc(roomName(s.request.roomId))}</strong>
+          <span class="meta">${Math.round(s.leg)} m leg | arrive in about ${fmtDur(s.eta)}</span></div>
+        <div class="meta">${esc(s.request.role)}: ${esc(s.request.requester)} | needed ${esc(s.request.neededAt)} | sent ${fmtTime(s.request.createdAt)}</div>
+        <div>${esc(s.request.reason)}</div>
+        <div class="actions">
+          <button class="small" data-act="approved" data-id="${esc(s.request.id)}">Approve and unlock</button>
+          <button class="small danger" data-act="denied" data-id="${esc(s.request.id)}">Deny</button>
+        </div>
+      </div>
+    </div>`).join("") : `<div class="empty">No pending requests. New ones appear here automatically.</div>`;
+
+  $("history").innerHTML = hist.length ? hist.map(r => `
+    <div class="req">
+      <div class="top"><strong>${esc(roomName(r.roomId))}</strong><span class="badge ${r.status}">${r.status}</span></div>
+      <div class="meta">${esc(r.role)}: ${esc(r.requester)} | ${esc(r.reason)}</div>
+      ${r.status === "approved" ? `<div class="actions"><button class="small ghost" data-act="completed" data-id="${esc(r.id)}">Mark completed</button></div>` : ""}
+    </div>`).join("") : `<div class="empty">Nothing handled yet.</div>`;
+}
+
+document.addEventListener("click", async e => {
+  const b = e.target.closest("button[data-act]");
+  if (!b) return;
+  try { await api(`/requests/${b.dataset.id}`, { method: "PATCH", body: { status: b.dataset.act } }); refresh(); }
+  catch (err) { alert(err.message); }
+});
+$("guardPos").addEventListener("change", refresh);
+$("agingWeight").addEventListener("input", refresh);
+
+/* ============ Boot ============ */
+if (user && token) start(); else show();
+</script>
+</body>
+</html>
