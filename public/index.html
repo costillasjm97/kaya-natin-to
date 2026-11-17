@@ -70,6 +70,16 @@
   .login-wrap{background:linear-gradient(160deg,var(--brand-dark),var(--brand) 60%,#3f9a72)}
   .login{border-top:5px solid var(--accent);box-shadow:0 8px 24px rgba(15,61,43,.25)}
   .login h1{color:var(--brand-dark)}
+  .rules{list-style:none;margin:.5rem 0 0;padding:0;display:flex;flex-wrap:wrap;gap:.25rem .9rem;font-size:.8rem;color:var(--muted)}
+  .rules li::before{content:"\25CB ";}
+  .rules li.ok{color:var(--ok)}
+  .rules li.ok::before{content:"\2713 ";}
+  .pw{position:relative}
+  .pw input{padding-right:2.75rem}
+  .eye{position:absolute;right:.35rem;top:50%;transform:translateY(-50%);background:transparent;color:var(--muted);padding:.35rem;border-radius:6px;display:flex}
+  .eye:hover{background:#e8f1ec!important;color:var(--brand)!important}
+  .eye.on .slash{display:none}
+  #password::-ms-reveal{display:none}
 
   /* App */
   header{background:linear-gradient(90deg,var(--brand-dark),var(--brand))}
@@ -129,24 +139,39 @@
 
     <div id="nameWrap" class="hidden">
       <label for="fullname">Full name</label>
-      <input id="fullname" type="text" autocomplete="name" placeholder="Jeon Jungkook">
+      <input id="fullname" type="text" autocomplete="name" placeholder="e.g. John Dela Cruz">
     </div>
 
     <label for="email">Email</label>
     <input id="email" type="email" placeholder="name@cvsu.edu.ph" autocomplete="username">
 
     <label for="password">Password</label>
-    <input id="password" type="password" autocomplete="current-password">
-    <label class="show"><input type="checkbox" id="showPw"> Show password</label>
+    <div class="pw">
+      <input id="password" type="password" autocomplete="current-password">
+      <button type="button" id="eyeBtn" class="eye" aria-label="Show password" aria-pressed="false">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/>
+          <circle cx="12" cy="12" r="3"/>
+          <line class="slash" x1="3" y1="3" x2="21" y2="21"/>
+        </svg>
+      </button>
+    </div>
+    <ul class="rules hidden" id="pwRules">
+      <li data-rule="len"> at least 8 characters</li>
+      <li data-rule="upper"> at least 1 uppercase</li>
+      <li data-rule="lower"> at least 1 lowercase</li>
+      <li data-rule="num"> at least 1 number</li>
+      <li data-rule="special"> at least 1 special character</li>
+    </ul>
 
     <div id="inviteWrap" class="hidden">
       <label for="invite">Invite code</label>
       <input id="invite" type="text" autocomplete="off">
     </div>
 
-    <button type="submit" id="submitBtn">Sign in</button>
+    <button type="submit" id="submitBtn">Sign In</button>
     <div class="error" id="loginError" role="alert"></div>
-    <p class="hint"><button type="button" class="ghost small" id="modeBtn">Create an account</button></p>
+    <p class="hint"><button type="button" class="ghost small" id="modeBtn">Create an Account</button></p>
   </form>
 </div>
 
@@ -189,7 +214,7 @@
         <input id="neededAt" type="time">
 
         <label for="reason">Reason</label>
-        <textarea id="reason" rows="3" placeholder="e.g. Group project meeting, makeup class"></textarea>
+        <textarea id="reason" rows="3" placeholder="For class discussion, or a scheduled academic activity..."></textarea>
         <div class="actions"><button type="submit">Send request</button></div>
         <div class="error" id="reqError" role="alert"></div>
       </form>
@@ -315,25 +340,41 @@ async function api(path, opts = {}) {
 function syncLoginMode() {
   $("nameWrap").classList.toggle("hidden", mode !== "register");
   $("inviteWrap").classList.toggle("hidden", mode !== "register");
-  $("submitBtn").textContent = mode === "login" ? "Sign in" : "Create account";
-  $("modeBtn").textContent = mode === "login" ? "Create an account" : "Back to sign in";
+  $("submitBtn").textContent = mode === "login" ? "Sign In" : "Create Account";
+  $("modeBtn").textContent = mode === "login" ? "Create an Account" : "Back to Sign In";
+  $("pwRules").classList.toggle("hidden", mode !== "register");
+  updatePwRules();
   $("loginError").textContent = "";
 }
 $("role").addEventListener("change", syncLoginMode);
-$("showPw").addEventListener("change", e => {
-  $("password").type = e.target.checked ? "text" : "password";
-});
-$("password").addEventListener("input", () => {
-  $("loginError").textContent =
-    mode === "register" && $("password").value && $("password").value.length < 8
-      ? "Password needs 8+ characters." : "";
-});
+function setPwVisible(show) {
+  $("password").type = show ? "text" : "password";
+  $("eyeBtn").classList.toggle("on", show);
+  $("eyeBtn").setAttribute("aria-pressed", String(show));
+  $("eyeBtn").setAttribute("aria-label", show ? "Hide password" : "Show password");
+}
+$("eyeBtn").addEventListener("click", () => setPwVisible($("password").type === "password"));
+$("password").addEventListener("input", updatePwRules);
 $("modeBtn").addEventListener("click", () => { mode = mode === "login" ? "register" : "login"; syncLoginMode(); });
+
+const PW_RULES = {
+  len:     p => p.length >= 8,          // change 8 here if you want a longer minimum
+  upper:   p => /[A-Z]/.test(p),
+  lower:   p => /[a-z]/.test(p),
+  num:     p => /[0-9]/.test(p),
+  special: p => /[^A-Za-z0-9]/.test(p)
+};
+const pwProblems = p => Object.keys(PW_RULES).filter(k => !PW_RULES[k](p));
+function updatePwRules() {
+  const p = $("password").value;
+  document.querySelectorAll("#pwRules li").forEach(li =>
+    li.classList.toggle("ok", PW_RULES[li.dataset.rule](p)));
+}
 
 $("loginForm").addEventListener("submit", async e => {
   e.preventDefault();
-  if (mode === "register" && $("password").value.length < 8) {
-    $("loginError").textContent = "Password needs 8+ characters.";
+  if (mode === "register" && pwProblems($("password").value).length) {
+    $("loginError").textContent = "Your password does not meet all the requirements listed above.";
     return;
   }
   try {
@@ -347,7 +388,7 @@ $("loginForm").addEventListener("submit", async e => {
     token = out.token; user = out.user;
     try { sessionStorage.setItem("cams_token", token); sessionStorage.setItem("cams_user", JSON.stringify(user)); } catch {}
     $("loginForm").reset();
-    $("password").type = "password";
+    setPwVisible(false);
     mode = "login"; syncLoginMode();
     await start();
   } catch (err) {
